@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mittens</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Mittens</h1>
+    <span class="version">v0.3.0</span>
+  </header>
+
+  <div class="container">
+    <div class="new-run">
+      <input type="text" id="mission-input" placeholder="Describe your mission...">
+      <select id="tier-select">
+        <option value="">Auto tier</option>
+        <option value="LOW">LOW</option>
+        <option value="MEDIUM">MEDIUM</option>
+        <option value="HIGH">HIGH</option>
+      </select>
+      <button onclick="startRun()">Run</button>
+    </div>
+
+    <div class="grid">
+      <div class="sidebar">
+        <h2>Runs</h2>
+        <ul class="run-list" id="run-list"></ul>
+      </div>
+
+      <div class="main" id="main-panel">
+        <div class="empty">Select or start a run to see details</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
