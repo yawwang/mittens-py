@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mittens-py"
+version = "3.5.0"
+description = "Portable runtime for the Mittens team system"
+requires-python = ">=3.10"
+dependencies = [
+    "python-frontmatter>=1.0.0",
+    "litellm>=1.0.0",
+    "click>=8.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+async = [
+    "pytest-asyncio>=0.21.0",
+]
+mcp = [
+    "mcp>=1.0.0",
+]
+web = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "aiosqlite>=0.19.0",
+    "websockets>=11.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.21.0",
+    "asgi-lifespan>=2.0.0",
+    "httpx>=0.24.0",
+]
+all = [
+    "mittens-py[async,mcp,web]",
+]
+
+[project.scripts]
+mittens = "mittens.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["mittens*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
