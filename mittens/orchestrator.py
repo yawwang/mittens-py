@@ -33,6 +33,7 @@ from mittens.types import (
     SessionSnapshot,
     ToolCall,
     WorkflowSpec,
+    categorize_checks,
 )
 
 logger = logging.getLogger(__name__)
@@ -273,9 +274,7 @@ class Orchestrator:
                 phase.id, state.tier.value, state.flags
             )
 
-            failed = [c for c in checks if c.result == CheckStatus.FAIL]
-            warned = [c for c in checks if c.result == CheckStatus.WARN]
-            passed = [c for c in checks if c.result == CheckStatus.PASS]
+            failed, warned, passed = categorize_checks(checks)
 
             check_summary = f"{len(checks)} checks: {len(passed)} pass, {len(failed)} fail"
             self.ledger.hook_result(
@@ -303,7 +302,7 @@ class Orchestrator:
                 )
                 self._invoke_reassess(phase, state, checks)
                 self.ledger.phase_complete(
-                    phase.id, "BLOCK", list(produced.keys()),
+                    phase.id, HookVerdict.BLOCK.value, list(produced.keys()),
                     [c.description for c in failed],
                 )
                 return
@@ -447,7 +446,6 @@ class Orchestrator:
             )
 
             if not response.tool_calls:
-                # LLM is done — append final response and break
                 if response.content:
                     messages.append({
                         "role": "assistant",

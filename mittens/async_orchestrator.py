@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +28,8 @@ from mittens.orchestrator import (
 )
 from mittens.registry import Registry
 from mittens.session import save_session
+from mittens.plugin_api import PluginRegistry, SkillContext
 from mittens.types import (
-    CheckStatus,
     ComplexityTier,
     HookVerdict,
     InstanceResult,
@@ -39,6 +40,7 @@ from mittens.types import (
     SessionSnapshot,
     ToolCall,
     WorkflowSpec,
+    categorize_checks,
 )
 from mittens.worktrees import (
     acreate_worktree,
@@ -237,9 +239,7 @@ class AsyncOrchestrator:
                 phase.id, state.tier.value, state.flags
             )
 
-            failed = [c for c in checks if c.result == CheckStatus.FAIL]
-            warned = [c for c in checks if c.result == CheckStatus.WARN]
-            passed = [c for c in checks if c.result == CheckStatus.PASS]
+            failed, warned, passed = categorize_checks(checks)
 
             check_summary = f"{len(checks)} checks: {len(passed)} pass, {len(failed)} fail"
             self.ledger.hook_result(
@@ -258,7 +258,7 @@ class AsyncOrchestrator:
             if loop_count > MAX_LOOPS_PER_PHASE:
                 self._sync._invoke_reassess(phase, state, checks)
                 self.ledger.phase_complete(
-                    phase.id, "BLOCK", list(produced.keys()),
+                    phase.id, HookVerdict.BLOCK.value, list(produced.keys()),
                     [c.description for c in failed],
                 )
                 return
@@ -278,7 +278,44 @@ class AsyncOrchestrator:
             "content": self._sync._build_phase_prompt(phase, state),
         })
 
+        plugin_produced: dict[str, str] = {}
+
         for skill_id in phase.required_skills:
+            # Check if a plugin executor is registered for this skill
+            if self._sync.plugin_registry:
+                plugin_skill = self._sync.plugin_registry.get_skill(skill_id)
+                if plugin_skill:
+                    start_time = time.time()
+                    ctx = SkillContext(
+                        phase_id=phase.id,
+                        talent_id=state.active_talent or "",
+                        artifacts=dict(state.artifacts),
+                        project_dir=self.project_dir,
+                    )
+                    try:
+                        result = plugin_skill.executor(ctx)
+                        for name, path in result.artifacts_produced.items():
+                            plugin_produced[name] = path
+                        duration = time.time() - start_time
+                        self.ledger.skill_invoked(
+                            skill_id, state.active_talent or "",
+                            phase.id,
+                            "SUCCESS" if result.success else "FAILED",
+                            duration,
+                        )
+                        if result.output:
+                            messages.append({
+                                "role": "user",
+                                "content": f"PLUGIN SKILL RESULT ({skill_id}):\n{result.output}",
+                            })
+                    except Exception as e:
+                        self.ledger.skill_invoked(
+                            skill_id, state.active_talent or "",
+                            phase.id, "FAILED", time.time() - start_time,
+                        )
+                        logger.warning("Plugin skill %s failed: %s", skill_id, e)
+                    continue
+
             instructions = self.registry.skill_instructions(skill_id)
             if not instructions:
                 continue
@@ -300,7 +337,7 @@ class AsyncOrchestrator:
                 })
 
         tools = tools_for_capabilities(self.caps.available)
-        produced: dict[str, str] = {}
+        produced: dict[str, str] = dict(plugin_produced)
 
         for turn in range(MAX_AGENT_TURNS):
             if self.stream:
@@ -453,10 +490,12 @@ class AsyncOrchestrator:
             self.config.capabilities if self.config else set()
         )
 
-        # Create worktrees if needed
+        def _branch_name(inst: InstanceSpec) -> str:
+            return f"task/{phase.id}-{inst.talent_id}-{inst.instance_num}"
+
         if use_worktrees:
             for inst in instances:
-                branch = f"task/{phase.id}-{inst.talent_id}-{inst.instance_num}"
+                branch = _branch_name(inst)
                 try:
                     inst.worktree_path = await acreate_worktree(self.project_dir, branch)
                 except Exception as e:
@@ -517,7 +556,7 @@ class AsyncOrchestrator:
         if use_worktrees:
             for inst in instances:
                 if inst.worktree_path:
-                    branch = f"task/{phase.id}-{inst.talent_id}-{inst.instance_num}"
+                    branch = _branch_name(inst)
                     try:
                         await amerge_worktree(self.project_dir, branch)
                         await aremove_worktree(self.project_dir, inst.worktree_path)
@@ -533,7 +572,7 @@ class AsyncOrchestrator:
                     state.artifacts[name] = name
 
         self.ledger.phase_complete(
-            phase.id, "PASS",
+            phase.id, HookVerdict.PASS.value,
             list(state.artifacts.keys()),
             [],
         )

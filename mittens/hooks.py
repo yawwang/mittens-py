@@ -208,13 +208,15 @@ class HookRunner:
         """Read artifact files for LLM evaluation context."""
         if not artifacts_dir.exists():
             return ""
+        max_chars = 2000
         parts = []
         for path in sorted(artifacts_dir.glob("*.md")):
             if path.name == "status-ledger.md":
                 continue  # Too large, not needed for checks
-            content = path.read_text()
-            if len(content) > 2000:
-                content = content[:2000] + "\n... (truncated)"
+            with open(path) as f:
+                content = f.read(max_chars + 1)
+            if len(content) > max_chars:
+                content = content[:max_chars] + "\n... (truncated)"
             parts.append(f"### {path.stem}\n{content}")
         return "\n\n".join(parts)
 

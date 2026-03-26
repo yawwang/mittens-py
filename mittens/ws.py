@@ -27,8 +27,6 @@ class EventBroadcaster:
     """
 
     def __init__(self) -> None:
-        self._queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
-        # run_id -> list of queues
         self._run_queues: dict[str, list[asyncio.Queue[dict[str, Any]]]] = {}
 
     def subscribe(self, run_id: str) -> asyncio.Queue[dict[str, Any]]:

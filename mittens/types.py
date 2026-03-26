@@ -144,6 +144,16 @@ class CheckResult:
     reasoning: str = ""
 
 
+def categorize_checks(
+    checks: list[CheckResult],
+) -> tuple[list[CheckResult], list[CheckResult], list[CheckResult]]:
+    """Split checks into (failed, warned, passed) groups."""
+    failed = [c for c in checks if c.result == CheckStatus.FAIL]
+    warned = [c for c in checks if c.result == CheckStatus.WARN]
+    passed = [c for c in checks if c.result == CheckStatus.PASS]
+    return failed, warned, passed
+
+
 @dataclass(frozen=True)
 class MittensConfig:
     """Runtime configuration."""
